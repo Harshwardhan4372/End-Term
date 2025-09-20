@@ -1,0 +1,1287 @@
+C1,
+1.erDiagram
+    USERS ||--o{GOALS : "manages"
+    USERS ||--o{GOALS : "assigned to"
+    USERS ||--o{FEEDBACK : "gives"
+    USERS ||--o{FEEDBACK : "receives"
+    GOALS ||--|{ TASKS : "is achieved by"
+    GOALS ||--|{ FEEDBACK : "is about"
+
+    USERS {
+        string userId PK "User ID (PK)"
+        string name "Full Name"
+        string email "Email Address"
+        string role "'Manager' or 'Employee'"
+        string managerId FK "Manager ID (FK)"
+    }
+
+  
+  GOALS {
+        string goalId PK "Goal ID (PK)"
+        string employeeId FK "Employee ID (FK)"
+        string managerId FK "Manager ID (FK)"
+        string description "Goal Description"
+        date dueDate "Due Date"
+        string status "'Draft', 'In Progress', 'Completed', 'Cancelled'"
+    }
+
+    TASKS {
+        string taskId PK "Task ID (PK)"
+        string goalId FK "Goal ID (FK)"
+        string description "Task Description"
+        boolean isApproved "Approved by Manager"
+        string status "'To Do', 'In Progress', 'Done'"
+    }
+
+    FEEDBACK {
+        string feedbackId PK "Feedback ID (PK)"
+        string goalId FK "Goal ID (FK)"
+        string giverId FK "Feedback Giver ID (FK)"
+        string receiverId FK "Receiver ID (FK)"
+        string content "Feedback Content"
+        string type "'Manual', 'Automated'"
+        timestamp createdAt "Timestamp"
+
+    }
+Table Name
+
+Field Name
+
+Data Type
+
+Constraints
+
+Description
+
+USERS
+
+
+
+
+
+
+
+Stores information about all users in the system.
+
+
+
+userId
+
+VARCHAR(255)
+
+PRIMARY KEY
+
+Unique identifier for the user.
+
+
+
+name
+
+VARCHAR(255)
+
+NOT NULL
+
+The full name of the user.
+
+
+
+email
+
+VARCHAR(255)
+
+NOT NULL, UNIQUE
+
+The user's email address, used for login.
+
+
+
+role
+
+ENUM('Manager', 'Employee')
+
+NOT NULL
+
+The role of the user within the system.
+
+
+
+managerId
+
+VARCHAR(255)
+
+FOREIGN KEY (USERS.userId)
+
+The userId of the user's manager. Can be NULL for top-level managers.
+
+GOALS
+
+
+
+
+
+
+
+Stores individual performance goals.
+
+
+
+goalId
+
+VARCHAR(255)
+
+PRIMARY KEY
+
+Unique identifier for the goal.
+
+
+
+employeeId
+
+VARCHAR(255)
+
+FOREIGN KEY (USERS.userId)
+
+The employee to whom the goal is assigned.
+
+
+
+managerId
+
+VARCHAR(255)
+
+FOREIGN KEY (USERS.userId)
+
+The manager who set the goal.
+
+
+
+description
+
+TEXT
+
+NOT NULL
+
+A detailed description of the goal.
+
+
+
+dueDate
+
+DATE
+
+NOT NULL
+
+The target completion date for the goal.
+
+
+
+status
+
+ENUM('Draft', 'In Progress', 'Completed', 'Cancelled')
+
+NOT NULL
+
+The current status of the goal.
+
+TASKS
+
+
+
+
+
+
+
+Stores tasks created by employees to achieve their goals.
+
+
+
+taskId
+
+VARCHAR(255)
+
+PRIMARY KEY
+
+Unique identifier for the task.
+
+
+
+goalId
+
+VARCHAR(255)
+
+FOREIGN KEY (GOALS.goalId)
+
+The goal this task is associated with.
+
+
+
+description
+
+TEXT
+
+NOT NULL
+
+A description of the task.
+
+
+
+isApproved
+
+BOOLEAN
+
+NOT NULL, DEFAULT false
+
+Whether the manager has approved the task.
+
+
+
+status
+
+ENUM('To Do', 'In Progress', 'Done')
+
+NOT NULL
+
+The current status of the task.
+
+FEEDBACK
+
+
+
+
+
+
+
+Stores feedback given by managers to employees.
+
+
+
+feedbackId
+
+VARCHAR(255)
+
+PRIMARY KEY
+
+Unique identifier for the feedback.
+
+
+
+goalId
+
+VARCHAR(255)
+
+FOREIGN KEY (GOALS.goalId)
+
+The goal the feedback is related to.
+
+
+
+giverId
+
+VARCHAR(255)
+
+FOREIGN KEY (USERS.userId)
+
+The user who provided the feedback (manager).
+
+
+
+receiverId
+
+VARCHAR(255)
+
+FOREIGN KEY (USERS.userId)
+
+The user who received the feedback (employee).
+
+
+
+content
+
+TEXT
+
+NOT NULL
+
+The written feedback.
+
+
+
+type
+
+ENUM('Manual', 'Automated')
+
+NOT NULL
+
+The type of feedback.
+
+
+
+createdAt
+
+TIMESTAMP
+
+NOT NULL, DEFAULT CURRENT_TIMESTAMP
+
+When the feedback was created.
+2.ACID Compliance in the Performance Management System
+ACID (Atomicity, Consistency, Isolation, Durability) is a set of properties of database transactions intended to guarantee validity even in the event of errors, power failures, etc. In our Performance Management System (PMS), ensuring ACID compliance is crucial for maintaining data integrity, especially for core operations.
+
+We will be using Google Firestore, a NoSQL document database, which has its own way of handling transactions that aligns with ACID principles.
+
+Key Transactions and How They Adhere to ACID Principles:
+
+
+Atomicity: The creation of a new task document is a single, atomic operation in Firestore. If the write fails for any reason, no partial task data is saved.
+
+Consistency: The application will enforce that a task can only be added to an existing, active goal ('Draft' or 'In Progress'). The new task document will be created with a default status of isApproved: false, maintaining a consistent state.
+
+Isolation: The creation of a new document is an isolated operation. It won't interfere with a manager who might be simultaneously viewing or editing the parent goal.
+
+Durability: Once the addDoc call is successful, the new task is durably stored in the database.
+
+3.Perfomance Management systems
+CRUD Operations in the Performance Management System
+This document explains how the core database operations—Create, Read, Update, and Delete—are handled in the Performance Management System application (pms-app.html). The system uses Google Firestore as its database, and the operations are performed using the Firebase JavaScript SDK.
+
+1. CREATE Operations
+Data is created when new records (documents) are added to the Firestore database.
+
+Create a Goal: A manager initiates this by clicking the "Add New Goal" button.
+
+Trigger: The submit event on the form inside the goal modal.
+
+Function: saveGoal(event, goalId = null)
+
+Code Snippet: When goalId is null, a new document is created in the goals collection.
+
+// ... inside saveGoal()
+if (goalId) {
+    // This is an update
+} else {
+    // This CREATES a new goal document
+    await addDoc(collection(db, "goals"), goalData);
+}
+
+Create a Task: An employee logs a task for an assigned goal.
+
+Trigger: Clicking the "Log New Task" button (.add-task-btn).
+
+Function: saveTask(event, goalId)
+
+Code Snippet: A new document is created in the tasks collection, linked to the goalId.
+
+// ... inside saveTask()
+await addDoc(collection(db, "tasks"), taskData);
+
+Create Feedback: A manager provides feedback on a specific goal.
+
+Trigger: Submitting the form after clicking the "Add Feedback" button (.add-feedback-btn).
+
+Function: saveFeedback(event, goalId)
+
+Code Snippet: A new document is created in the feedback collection.
+
+// ... inside saveFeedback()
+await addDoc(collection(db, "feedback"), feedbackData);
+
+2. READ Operations
+Data is read from Firestore to display goals, tasks, and feedback to the user. The application uses real-time listeners (onSnapshot) to ensure the UI is always up-to-date.
+
+Read Goals (Manager & Employee Views): The system fetches goals based on the user's role.
+
+Trigger: The render() function calls renderManagerView() or renderEmployeeView().
+
+Functions: renderManagerView(), renderEmployeeView()
+
+Code Snippet (Manager): Fetches all goals where the managerId matches the current user's ID.
+
+const q = query(collection(db, "goals"), where("managerId", "==", currentUser.uid));
+onSnapshot(q, (snapshot) => {
+    // ... render goals for the manager
+});
+
+Read Tasks for a Goal: When a goal is displayed in the employee view, its associated tasks are fetched.
+
+Trigger: Called from within renderEmployeeView() for each goal card.
+
+Function: renderTasksForGoal(goalId)
+
+Code Snippet: Fetches tasks from the tasks collection that match the goalId.
+
+const q = query(collection(db, "tasks"), where("goalId", "==", goalId));
+onSnapshot(q, (snapshot) => {
+    // ... render tasks for that specific goal
+});
+
+Read Feedback for a Goal: When a manager clicks "View Feedback".
+
+Trigger: Clicking the .view-feedback-btn.
+
+Function: openViewFeedbackModal(goalId)
+
+Code Snippet: This is a one-time fetch (not real-time) using getDocs to get all feedback associated with a goal.
+
+const q = query(collection(db, "feedback"), where("goalId", "==", goalId));
+const snapshot = await getDocs(q);
+// ... process and display feedback history
+
+3. UPDATE Operations
+Updates occur when existing data in a document is modified.
+
+Update a Goal: Managers can edit a goal's description, due date, or status.
+
+Trigger: Submitting the form in the goal modal after clicking the "Edit Goal" button (.edit-goal-btn).
+
+Function: saveGoal(event, goalId)
+
+Code Snippet: When a goalId is provided, the setDoc function with { merge: true } is used to update the existing document without overwriting it completely.
+
+// ... inside saveGoal()
+if (goalId) {
+    // This UPDATES the existing goal document
+    await setDoc(doc(db, "goals", goalId), goalData, { merge: true });
+} else {
+    // This is a create operation
+}
+
+Update Task (Approval):
+
+Note: While the data structure supports task approval (isApproved field), the UI and logic for a manager to approve a task have not been implemented in the current version of pms-app.html. This would be a future enhancement.
+
+4. DELETE Operations
+This application employs a "soft delete" strategy, which is a best practice for systems requiring a historical record. Instead of permanently removing data, a status is changed to indicate it is no longer active.
+
+"Delete" a Goal: A manager can effectively delete a goal by marking it as 'Cancelled'.
+
+Trigger: This is done via the Update operation. The manager edits a goal and changes its status dropdown to 'Cancelled'.
+
+Function: saveGoal(event, goalId)
+
+Benefit: This preserves the goal in the database for historical reporting and performance reviews, which is more desirable than permanent deletion (deleteDoc). The application does not use deleteDoc for any core business objects.
+By leveraging Firestore's transaction capabilities and implementing proper application-level validation, the PMS will ensure that all critical operations are ACID compliant, providing a reliable and trustworthy system for performance management.
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Management System</title>
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap)" rel="stylesheet">
+    <script src="[https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js](https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js)"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="bg-white shadow-md rounded-lg p-4 mb-6 flex justify-between items-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Performance Management System</h1>
+            <div id="auth-container">
+                <p id="user-info" class="text-sm text-gray-600">Loading...</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-content" class="hidden">
+            <!-- User Role Switcher -->
+            <div class="mb-6 bg-white p-4 rounded-lg shadow-md flex items-center justify-center space-x-4">
+                <span class="font-medium">View As:</span>
+                <div class="flex rounded-md shadow-sm">
+                    <button id="view-as-manager" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-l-lg hover:bg-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-500">Manager</button>
+                    <button id="view-as-employee" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-blue-500">Employee</button>
+                </div>
+                 <div class="flex rounded-md shadow-sm">
+                    <button id="view-as-dashboard" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-r-lg hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-blue-500">Dashboard</button>
+                </div>
+            </div>
+
+            <!-- Manager View -->
+            <div id="manager-view">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">Manager Dashboard</h2>
+                    <button id="add-goal-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow">Add New Goal</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="manager-goals-container">
+                    <!-- Goals will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Employee View -->
+            <div id="employee-view" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">My Goals</h2>
+                <div class="space-y-6" id="employee-goals-container">
+                    <!-- Employee's goals will be dynamically inserted here -->
+                </div>
+            </div>
+              <!-- Dashboard View -->
+            <div id="dashboard-view" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">Analytics Dashboard</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="dashboard-container">
+                    <!-- Dashboard cards will be dynamically inserted here -->
+                </div>
+            </div>
+        </main>
+        
+        <!-- Modals -->
+        <div id="goal-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+            <!-- Goal Modal Content -->
+        </div>
+        <div id="task-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+           <!-- Task Modal Content -->
+        </div>
+        <div id="feedback-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+            <!-- Feedback Modal Content -->
+        </div>
+         <div id="view-feedback-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+            <!-- View Feedback Modal Content -->
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js)";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js)";
+        import { getFirestore, setDoc, doc, addDoc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, deleteDoc, writeBatch } from "[https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js)";
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // --- App Initialization ---
+        let app, db, auth;
+        let currentUser = null;
+        let currentRole = 'Manager'; // Default view
+        let users = [];
+
+        // --- DOM Elements ---
+        const mainContent = document.getElementById('main-content');
+        const userInfo = document.getElementById('user-info');
+        const managerView = document.getElementById('manager-view');
+        const employeeView = document.getElementById('employee-view');
+        const dashboardView = document.getElementById('dashboard-view');
+        const viewAsManagerBtn = document.getElementById('view-as-manager');
+        const viewAsEmployeeBtn = document.getElementById('view-as-employee');
+        const viewAsDashboardBtn = document.getElementById('view-as-dashboard');
+        const addGoalBtn = document.getElementById('add-goal-btn');
+        const goalModal = document.getElementById('goal-modal');
+        const taskModal = document.getElementById('task-modal');
+        const feedbackModal = document.getElementById('feedback-modal');
+        const viewFeedbackModal = document.getElementById('view-feedback-modal');
+
+        // --- Helper Functions ---
+        function getStatusColor(status) {
+            switch (status) {
+                case 'Completed': return 'bg-green-100 text-green-800';
+                case 'In Progress': return 'bg-blue-100 text-blue-800';
+                case 'Cancelled': return 'bg-red-100 text-red-800';
+                case 'Draft': return 'bg-yellow-100 text-yellow-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+        
+        async function initializeAppAndAuth() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUser = user;
+                        await setupInitialData();
+                        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+                        if(userDoc.exists()) {
+                            const userData = userDoc.data();
+                            userInfo.textContent = `Logged in as ${userData.name} (${userData.role}) | UserID: ${currentUser.uid.substring(0, 8)}`;
+                        }
+                        mainContent.classList.remove('hidden');
+                        render();
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                userInfo.textContent = "Error: Could not connect to the service.";
+            }
+        }
+
+        async function setupInitialData() {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef);
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                console.log("No users found. Setting up initial data...");
+                const batch = writeBatch(db);
+                
+                const managerId = currentUser.uid;
+                const employee1Id = "employee_1_id";
+                const employee2Id = "employee_2_id";
+
+                batch.set(doc(db, "users", managerId), { name: "Manager Mike", email: "manager@example.com", role: "Manager", managerId: null });
+                batch.set(doc(db, "users", employee1Id), { name: "Employee Emma", email: "emma@example.com", role: "Employee", managerId: managerId });
+                batch.set(doc(db, "users", employee2Id), { name: "Employee Evan", email: "evan@example.com", role: "Employee", managerId: managerId });
+                
+                await batch.commit();
+                console.log("Initial user data created.");
+            }
+
+            const usersSnapshot = await getDocs(collection(db, "users"));
+            users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+        function render() {
+            if (currentRole === 'Manager') {
+                managerView.classList.remove('hidden');
+                employeeView.classList.add('hidden');
+                dashboardView.classList.add('hidden');
+                viewAsManagerBtn.classList.add('bg-blue-600', 'text-white');
+                viewAsManagerBtn.classList.remove('bg-white', 'text-gray-700');
+                viewAsEmployeeBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsEmployeeBtn.classList.remove('bg-blue-600', 'text-white');
+                viewAsDashboardBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsDashboardBtn.classList.remove('bg-blue-600', 'text-white');
+                renderManagerView();
+            } else if (currentRole === 'Employee') {
+                managerView.classList.add('hidden');
+                employeeView.classList.remove('hidden');
+                dashboardView.classList.add('hidden');
+                viewAsManagerBtn.classList.remove('bg-blue-600', 'text-white');
+                viewAsManagerBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsEmployeeBtn.classList.remove('bg-white', 'text-gray-700');
+                viewAsEmployeeBtn.classList.add('bg-blue-600', 'text-white');
+                viewAsDashboardBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsDashboardBtn.classList.remove('bg-blue-600', 'text-white');
+                renderEmployeeView();
+            } else { // Dashboard
+                 managerView.classList.add('hidden');
+                employeeView.classList.add('hidden');
+                dashboardView.classList.remove('hidden');
+                viewAsManagerBtn.classList.remove('bg-blue-600', 'text-white');
+                viewAsManagerBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsEmployeeBtn.classList.remove('bg-blue-600', 'text-white');
+                viewAsEmployeeBtn.classList.add('bg-white', 'text-gray-700');
+                viewAsDashboardBtn.classList.remove('bg-white', 'text-gray-700');
+                viewAsDashboardBtn.classList.add('bg-blue-600', 'text-white');
+                renderDashboardView();
+            }
+        }
+        
+        // --- RENDER VIEWS ---
+        function renderManagerView() {
+            const container = document.getElementById('manager-goals-container');
+            container.innerHTML = `<div class="text-center col-span-full"><p>Loading goals...</p></div>`;
+
+            const q = query(collection(db, "goals"), where("managerId", "==", currentUser.uid));
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center col-span-full"><p>No goals set yet. Click 'Add New Goal' to begin.</p></div>`;
+                    return;
+                }
+                container.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const goal = { id: doc.id, ...doc.data() };
+                    const employee = users.find(u => u.id === goal.employeeId);
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-5 rounded-lg shadow-lg';
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-bold text-lg mb-2">${employee ? employee.name : 'Unknown Employee'}</h3>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full ${getStatusColor(goal.status)}">${goal.status}</span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">${goal.description}</p>
+                        <p class="text-sm font-medium text-gray-500 mb-4">Due: ${goal.dueDate}</p>
+                        <div class="flex flex-wrap gap-2">
+                             <button data-goal-id="${goal.id}" class="edit-goal-btn flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-bold py-2 px-4 rounded">Edit Goal</button>
+                            <button data-goal-id="${goal.id}" class="add-feedback-btn flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-4 rounded">Add Feedback</button>
+                             <button data-goal-id="${goal.id}" class="view-feedback-btn flex-1 bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-4 rounded">View Feedback</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            });
+        }
+        
+        function renderEmployeeView() {
+            const container = document.getElementById('employee-goals-container');
+            container.innerHTML = `<div class="text-center"><p>Loading goals...</p></div>`;
+            
+            const employeeUser = users.find(u => u.role === "Employee");
+            if(!employeeUser) {
+                 container.innerHTML = `<div class="text-center"><p>No employee user found for this demo.</p></div>`;
+                 return;
+            }
+            const employeeId = employeeUser.id;
+
+            const q = query(collection(db, "goals"), where("employeeId", "==", employeeId));
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = `<div class="text-center"><p>You have no goals assigned.</p></div>`;
+                    return;
+                }
+                container.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const goal = { id: doc.id, ...doc.data() };
+                    const goalCard = document.createElement('div');
+                    goalCard.className = 'bg-white p-6 rounded-lg shadow-lg';
+                    goalCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-bold text-lg">${goal.description}</h3>
+                                <p class="text-sm text-gray-500">Due: ${goal.dueDate}</p>
+                            </div>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full ${getStatusColor(goal.status)}">${goal.status}</span>
+                        </div>
+                        <div id="tasks-for-${goal.id}" class="mt-4 space-y-2">
+                            <p class="text-sm font-medium text-gray-700">Tasks:</p>
+                            <!-- Tasks will load here -->
+                        </div>
+                        <div class="mt-4">
+                            <button data-goal-id="${goal.id}" class="add-task-btn bg-green-500 hover:bg-green-600 text-white text-sm font-bold py-2 px-3 rounded-lg">Log New Task</button>
+                        </div>
+                    `;
+                    container.appendChild(goalCard);
+                    renderTasksForGoal(goal.id);
+                });
+            });
+        }
+
+        function renderTasksForGoal(goalId) {
+            const taskContainer = document.getElementById(`tasks-for-${goalId}`);
+            const q = query(collection(db, "tasks"), where("goalId", "==", goalId));
+            onSnapshot(q, (snapshot) => {
+                let taskHtml = '<ul class="list-disc list-inside pl-2 space-y-1">';
+                if (snapshot.empty) {
+                    taskHtml += '<li class="text-sm text-gray-500">No tasks logged for this goal yet.</li>';
+                } else {
+                    snapshot.forEach(doc => {
+                        const task = doc.data();
+                        taskHtml += `<li class="text-sm ${task.isApproved ? 'text-green-600' : 'text-yellow-600'}">${task.description} - ${task.isApproved ? 'Approved' : 'Pending Approval'}</li>`;
+                    });
+                }
+                taskHtml += '</ul>';
+                taskContainer.innerHTML = taskHtml;
+            });
+        }
+        
+         function renderDashboardView() {
+            const container = document.getElementById('dashboard-container');
+            container.innerHTML = `<div class="text-center col-span-full"><p>Loading analytics...</p></div>`;
+
+            const q = query(collection(db, "goals"), where("managerId", "==", currentUser.uid));
+            onSnapshot(q, (snapshot) => {
+                const goals = snapshot.docs.map(doc => doc.data());
+                
+                const totalGoals = goals.length;
+                const completedGoals = goals.filter(g => g.status === 'Completed').length;
+                const inProgressGoals = goals.filter(g => g.status === 'In Progress').length;
+                const cancelledGoals = goals.filter(g => g.status === 'Cancelled').length;
+
+                const completionRate = totalGoals > 0 ? ((completedGoals / (totalGoals-goals.filter(g => g.status === 'Draft').length)) * 100).toFixed(0) : 0;
+
+                container.innerHTML = `
+                    <div class="bg-white p-5 rounded-lg shadow-lg text-center">
+                        <h3 class="font-semibold text-gray-500">Completion Rate</h3>
+                        <p class="text-4xl font-bold text-green-600">${completionRate}%</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-lg shadow-lg text-center">
+                        <h3 class="font-semibold text-gray-500">In Progress</h3>
+                        <p class="text-4xl font-bold text-blue-600">${inProgressGoals}</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-lg shadow-lg text-center">
+                        <h3 class="font-semibold text-gray-500">Completed</h3>
+                        <p class="text-4xl font-bold text-gray-800">${completedGoals}</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-lg shadow-lg text-center">
+                        <h3 class="font-semibold text-gray-500">Cancelled</h3>
+                        <p class="text-4xl font-bold text-red-600">${cancelledGoals}</p>
+                    </div>
+                `;
+            });
+        }
+
+
+        // --- MODAL RENDERING ---
+        function openGoalModal(goal = null) {
+            const employees = users.filter(u => u.role === 'Employee');
+            let employeeOptions = employees.map(e => `<option value="${e.id}" ${goal && goal.employeeId === e.id ? 'selected' : ''}>${e.name}</option>`).join('');
+
+            goalModal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-auto p-8">
+                    <h2 class="text-2xl font-bold mb-6">${goal ? 'Edit' : 'Create'} Goal</h2>
+                    <form id="goal-form">
+                        <div class="mb-4">
+                            <label for="employee-select" class="block text-sm font-medium text-gray-700">Assign To:</label>
+                            <select id="employee-select" name="employeeId" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required ${goal ? 'disabled' : ''}>${employeeOptions}</select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="goal-description" class="block text-sm font-medium text-gray-700">Description:</label>
+                            <textarea id="goal-description" name="description" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required>${goal ? goal.description : ''}</textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label for="goal-due-date" class="block text-sm font-medium text-gray-700">Due Date:</label>
+                            <input type="date" id="goal-due-date" name="dueDate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" value="${goal ? goal.dueDate : ''}" required>
+                        </div>
+                         <div class="mb-6">
+                            <label for="goal-status" class="block text-sm font-medium text-gray-700">Status:</label>
+                            <select id="goal-status" name="status" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required>
+                                <option value="Draft" ${goal && goal.status === 'Draft' ? 'selected' : ''}>Draft</option>
+                                <option value="In Progress" ${goal && goal.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                <option value="Completed" ${goal && goal.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                <option value="Cancelled" ${goal && goal.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button type="button" id="cancel-goal" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">${goal ? 'Update' : 'Save'} Goal</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            goalModal.classList.remove('hidden');
+            goalModal.classList.add('flex');
+            
+            document.getElementById('goal-form').addEventListener('submit', (e) => saveGoal(e, goal ? goal.id : null));
+            document.getElementById('cancel-goal').addEventListener('click', () => goalModal.classList.add('hidden'));
+        }
+        
+        function openTaskModal(goalId) {
+            taskModal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-auto p-8">
+                    <h2 class="text-2xl font-bold mb-6">Log a New Task</h2>
+                    <form id="task-form">
+                        <div class="mb-4">
+                            <label for="task-description" class="block text-sm font-medium text-gray-700">Task Description:</label>
+                            <textarea id="task-description" name="description" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button type="button" id="cancel-task" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Task</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            taskModal.classList.remove('hidden');
+            taskModal.classList.add('flex');
+            
+            document.getElementById('task-form').addEventListener('submit', (e) => saveTask(e, goalId));
+            document.getElementById('cancel-task').addEventListener('click', () => taskModal.classList.add('hidden'));
+        }
+
+        function openFeedbackModal(goalId) {
+            feedbackModal.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-auto p-8">
+                    <h2 class="text-2xl font-bold mb-6">Provide Feedback</h2>
+                    <form id="feedback-form">
+                        <div class="mb-4">
+                            <label for="feedback-content" class="block text-sm font-medium text-gray-700">Feedback:</label>
+                            <textarea id="feedback-content" name="content" rows="4" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" required></textarea>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button type="button" id="cancel-feedback" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Submit Feedback</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            feedbackModal.classList.remove('hidden');
+            feedbackModal.classList.add('flex');
+
+            document.getElementById('feedback-form').addEventListener('submit', (e) => saveFeedback(e, goalId));
+            document.getElementById('cancel-feedback').addEventListener('click', () => feedbackModal.classList.add('hidden'));
+        }
+        
+        async function openViewFeedbackModal(goalId) {
+            const q = query(collection(db, "feedback"), where("goalId", "==", goalId));
+            const snapshot = await getDocs(q);
+            let feedbackHtml = '<p class="text-gray-500">No feedback given for this goal yet.</p>';
+
+            if (!snapshot.empty) {
+                const converter = new showdown.Converter();
+                 feedbackHtml = '<ul class="space-y-4">';
+                 snapshot.forEach(doc => {
+                     const feedback = doc.data();
+                     const formattedDate = new Date(feedback.createdAt.seconds * 1000).toLocaleString();
+                      feedbackHtml += `
+                        <li class="border-b pb-2">
+                            <p class="text-sm text-gray-800">${converter.makeHtml(feedback.content)}</p>
+                            <p class="text-xs text-gray-500 mt-1">On: ${formattedDate} | Type: <span class="font-semibold">${feedback.type}</span></p>
+                        </li>`;
+                 });
+                 feedbackHtml += '</ul>';
+            }
+
+            viewFeedbackModal.innerHTML = `
+                 <div class="bg-white rounded-lg shadow-xl w-full max-w-lg m-auto p-8">
+                    <h2 class="text-2xl font-bold mb-6">Feedback History</h2>
+                    <div class="max-h-96 overflow-y-auto">${feedbackHtml}</div>
+                    <div class="flex justify-end mt-6">
+                        <button type="button" id="close-view-feedback" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Close</button>
+                    </div>
+                 </div>
+            `;
+            viewFeedbackModal.classList.remove('hidden');
+            viewFeedbackModal.classList.add('flex');
+            document.getElementById('close-view-feedback').addEventListener('click', () => viewFeedbackModal.classList.add('hidden'));
+        }
+
+        // --- DATA SAVING LOGIC ---
+        async function saveGoal(event, goalId = null) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const goalData = {
+                description: formData.get('description'),
+                dueDate: formData.get('dueDate'),
+                status: formData.get('status'),
+                managerId: currentUser.uid,
+                employeeId: formData.get('employeeId')
+            };
+
+            try {
+                if (goalId) {
+                    await setDoc(doc(db, "goals", goalId), goalData, { merge: true });
+                } else {
+                    await addDoc(collection(db, "goals"), goalData);
+                }
+                goalModal.classList.add('hidden');
+            } catch (e) {
+                console.error("Error saving goal: ", e);
+            }
+        }
+        
+        async function saveTask(event, goalId) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const taskData = {
+                goalId: goalId,
+                description: formData.get('description'),
+                isApproved: false,
+                status: 'To Do'
+            };
+            try {
+                await addDoc(collection(db, "tasks"), taskData);
+                taskModal.classList.add('hidden');
+            } catch (e) {
+                console.error("Error saving task: ", e);
+            }
+        }
+
+         async function saveFeedback(event, goalId) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const goalDoc = await getDoc(doc(db, "goals", goalId));
+            const goal = goalDoc.data();
+
+            const feedbackData = {
+                goalId: goalId,
+                giverId: currentUser.uid,
+                receiverId: goal.employeeId,
+                content: formData.get('content'),
+                type: 'Manual',
+                createdAt: new Date()
+            };
+
+            try {
+                await addDoc(collection(db, "feedback"), feedbackData);
+                feedbackModal.classList.add('hidden');
+            } catch (e) {
+                console.error("Error saving feedback: ", e);
+            }
+        }
+        
+        // --- EVENT LISTENERS ---
+        viewAsManagerBtn.addEventListener('click', () => {
+            currentRole = 'Manager';
+            render();
+        });
+
+        viewAsEmployeeBtn.addEventListener('click', () => {
+            currentRole = 'Employee';
+            render();
+        });
+        
+        viewAsDashboardBtn.addEventListener('click', () => {
+            currentRole = 'Dashboard';
+            render();
+        });
+        
+
+        addGoalBtn.addEventListener('click', () => openGoalModal());
+        
+        document.addEventListener('click', async (e) => {
+            if (e.target.matches('.edit-goal-btn')) {
+                const goalId = e.target.dataset.goalId;
+                const goalDoc = await getDoc(doc(db, "goals", goalId));
+                openGoalModal({ id: goalId, ...goalDoc.data() });
+            }
+             if (e.target.matches('.add-task-btn')) {
+                const goalId = e.target.dataset.goalId;
+                openTaskModal(goalId);
+            }
+             if (e.target.matches('.add-feedback-btn')) {
+                const goalId = e.target.dataset.goalId;
+                openFeedbackModal(goalId);
+            }
+            if (e.target.matches('.view-feedback-btn')) {
+                const goalId = e.target.dataset.goalId;
+                openViewFeedbackModal(goalId);
+            }
+        });
+
+        // --- App Start ---
+        initializeAppAndAuth();
+
+    </script>
+</body>
+</html>
+4.Analytics Dashboard
+The Analytics Dashboard provides managers with a high-level overview of their team's performance, focusing on key metrics derived from the goals and feedback data. This dashboard is designed to offer actionable insights at a glance.
+
+Key Performance Indicators (KPIs)
+Goal Completion Rate:
+
+Visualization: A prominent donut chart or percentage gauge.
+
+Calculation: (Number of 'Completed' Goals / Total Number of Goals (excluding 'Draft')) * 100%
+
+Insight: Measures the overall effectiveness of the team in achieving their set objectives.
+
+Goals Status Breakdown:
+
+Visualization: A bar chart.
+
+Calculation: A simple count of goals in each status category ('In Progress', 'Completed', 'Cancelled').
+
+Insight: Shows the current workload and progress distribution across the team. A high number of 'In Progress' goals might indicate a need for support.
+
+Average Goal Completion Time:
+
+Visualization: A single large number metric (e.g., "25 Days").
+
+Calculation: The average duration between the goal creation date and the date it was moved to 'Completed'.
+
+Insight: Helps in understanding the team's velocity and can be used to set more realistic due dates in the future.
+
+Feedback Frequency:
+
+Visualization: A line chart showing the number of feedback entries over time (e.g., per week or month).
+
+Calculation: Count of feedback records created over a period.
+
+Insight: Tracks how consistently managers are providing feedback, which is crucial for continuous performance improvement.
+
+Overdue Goals:
+
+Visualization: A list or a "critical alert" card.
+
+Calculation: Count of 'In Progress' goals where the current date is past the dueDate.
+
+Insight: Immediately highlights goals that are falling behind and require attention.
+
+Dashboard Layout
+The dashboard will be a simple, clean interface:
+
+Top Row: KPI cards showing the most critical numbers (Goal Completion Rate, Overdue Goals).
+
+Main Section: Charts for Goal Status Breakdown and Feedback Frequency.
+
+Employee Drill-Down: A filter or dropdown to view these metrics for individual employees, allowing managers to transition from a team overview to individual performance analysis.
+
+
+5.https://super-space-winner-4qq6wjp9qrxc6r6.github.dev/
+6.mindmap
+  root((Performance Management System))
+    ::icon(fa fa-sitemap)
+    USERS
+      ::icon(fa fa-users)
+      Manager
+        - Set & View Goals
+        - Approve Tasks
+        - Provide Feedback
+        - View Reports
+        - Update Goal Status
+      Employee
+        - View Assigned Goals
+        - Log Tasks for Goals
+        - View Progress
+        - View Feedback
+    FEATURES
+      ::icon(fa fa-cogs)
+      Goal & Task Setting
+        - Create Goal (Desc, Due Date)
+        - Set Status (Draft, In Progress, Completed, Cancelled)
+        - View Individual Goals
+        - Log Tasks for Goal
+        - Manager Approval for Tasks
+      Progress Tracking
+        - Visual status indicators
+        - Task completion checklist
+        - Goal progress bar (future enhancement)
+      Feedback
+        - Manager provides written feedback per goal
+        - Automated Feedback Triggers
+          - e.g., On 'Goal Completed'
+      Reporting
+        - Employee Performance History
+        - View all past/present goals
+        - Chronological feedback log
+    TECHNICAL
+      ::icon(fa fa-code)
+      Database (Firestore)
+        - Collections: users, goals, tasks, feedback
+        - ACID Compliance via Transactions
+      Frontend (HTML, Tailwind CSS, JS)
+        - Single-page application feel
+        - Responsive Design
+      CRUD Operations
+        - Create: Goals, Tasks, Feedback
+        - Read: All data by role
+        - Update: Goal/Task Status
+        - Delete: (Scoped, e.g., 'Cancelled' status)
+      Analytics Dashboard
+        - Goal Completion Rate
+        - Average Time to Completion
+        - Feedback Frequency
+C2.
+1. Project Objective & Scope
+Objective: To create an interactive Business Intelligence (BI) dashboard that provides timely, actionable insights into the U.S. Non-Farm Payrolls report. The dashboard will serve as a central resource for analysts, economists, and stakeholders to monitor the health of the U.S. labor market, identify trends, and analyze sectoral shifts.
+
+Scope: The project will focus exclusively on national-level Non-Farm Payroll data sourced from the Federal Reserve Economic Data (FRED) database. The initial version will cover total payrolls and major industry super-sectors.
+
+2. Key Stakeholder Questions
+The dashboard must be designed to answer the following core questions:
+
+What is the latest headline Non-Farm Payrolls number and how does it compare to the previous month?
+
+What is the long-term historical trend for job growth in the U.S.?
+
+Which sectors (Goods-Producing, Service-Providing, Government) are contributing most to the current payroll numbers?
+
+Which specific industries saw the largest job gains or losses in the most recent report?
+
+How has the composition of the U.S. workforce evolved over time?
+
+3. Data Source: FRED
+The primary data source will be the St. Louis Federal Reserve's FRED database. The key data series to be used are:
+
+FRED Series ID
+
+Description
+
+PAYEMS
+
+Total Nonfarm Payrolls
+
+USGOOD
+
+Goods-Producing Industries
+
+USPRIV
+
+Total Private Industries
+
+USSVPR
+
+Private Service-Providing Industries
+
+USGOVT
+
+Government
+
+MANEMP
+
+Manufacturing
+
+USCONS
+
+Construction
+
+IEPAM
+
+Education and Health Services
+
+RETAIL
+
+Retail Trade
+
+4. OLAP Data Model: Star Schema
+To facilitate fast, flexible analysis (OLAP), the data will be structured in a star schema. This separates the quantitative payroll numbers (the facts) from their descriptive context (the dimensions).
+
+erDiagram
+    Fact_Payrolls {
+        int DateKey FK "Date Key (FK)"
+        int IndustryKey FK "Industry Key (FK)"
+        int PayrollCount "Payroll Count (in thousands)"
+        int MoM_Change "Month-over-Month Change"
+        int YoY_Change "Year-over-Year Change"
+    }
+
+    Dim_Date {
+        int DateKey PK "Date Key (PK)"
+        date FullDate "Full Date"
+        int Year "Year"
+        int Quarter "Quarter"
+        int Month "Month"
+        string MonthName "Month Name"
+    }
+
+    Dim_Industry {
+        int IndustryKey PK "Industry Key (PK)"
+        string IndustryName "Industry Name"
+        string SuperSector "Super Sector"
+        string FRED_SeriesID "FRED Series ID"
+    }
+
+    Fact_Payrolls }o--|| Dim_Date : "has a"
+    Fact_Payrolls }o--|| Dim_Industry : "belongs to"
+
+
+Fact Table (Fact_Payrolls): Contains the core numerical data points.
+
+Dimension Tables (Dim_Date, Dim_Industry): Contain the attributes used to filter, group, and label the data (e.g., "show me Manufacturing jobs for Q2 2024").
+
+5. Dashboard KPIs and Visualizations
+The dashboard will be organized into several key components to provide a comprehensive overview.
+
+Headline KPIs (Key Performance Indicators):
+
+Latest Total Nonfarm Payrolls: A large number display showing the figure for the most recent month.
+
+Month-over-Month (MoM) Change: A large number display with a conditional indicator (e.g., green up arrow for growth, red down arrow for decline).
+
+Primary Visualizations:
+
+Historical Payroll Trend (Line Chart): A time-series line chart showing the total PAYEMS value over the last 10-20 years, with annotations for major economic events like recessions.
+
+Payroll Composition by Super-Sector (Donut Chart): Shows the current percentage breakdown of jobs between Goods-Producing, Service-Providing, and Government sectors.
+
+MoM Job Change by Industry (Bar Chart): A horizontal bar chart ranking the top 10 industries by jobs added or lost in the latest month. This provides immediate insight into the drivers of the monthly change.
+
+Interactive Elements:
+
+Date Range Slicer: Allows users to filter all visuals to a specific time period.
+
+Industry Filter: Allows users to drill down into a specific industry to see its historical trend.
+
+Tooltips: Hovering over data points will reveal detailed information, such as the exact value and date.
+
+6. Proposed Technology Stack
+ETL (Extract, Transform, Load): Python (using Pandas and the fredapi library) to fetch data from the FRED API and transform it into the star schema. The process can be automated using a scheduler.
+
+Data Warehouse: A columnar database like Google BigQuery, Amazon Redshift, or Snowflake is ideal for OLAP queries.
+
+BI & Dashboarding Tool: A tool like Tableau, Power BI, or Looker to connect to the data warehouse and build the interactive visualizations.
